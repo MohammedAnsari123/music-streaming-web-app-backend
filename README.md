@@ -1,150 +1,190 @@
-# StreamLite - Backend API
+# StreamLite - Backend API 🎧
 
-The **StreamLite Backend** is a robust RESTful API built with Node.js and Express. It serves as the central orchestration layer for the platform, managing data persistence, user authentication, and the complex logic of bridging external music APIs.
+The **StreamLite Backend** is the high-performance central nervous system of the StreamLite platform. Built on **Node.js** and **Express**, it orchestrates the complex interaction between the user's local library, the **Suzuki** (Supabase) database, and decentralized external music networks.
 
----
-
-## 📚 Table of Contents
-- [Overview](#overview)
-- [✨ Key Features](#-key-features)
-- [🛠️ Technology Stack](#️-technology-stack)
-- [🔌 External Integrations](#-external-integrations)
-- [📂 Project Structure](#-project-structure)
-- [📋 Database & Storage](#-database--storage)
-- [🔐 API Documentation](#-api-documentation)
-- [⚙️ Setup & Configuration](#️-setup--configuration)
+> **Status:** 🟢 Active | **Version:** 1.0.0 | **Port:** 3000
 
 ---
 
-## Overview
-The backend acts as the source of truth for the application. It connects to a **Supabase (PostgreSQL)** database for structured data and **Cloudinary** for media asset storage. Crucially, it provides the "Resolution Engine" (`/api/resolve`) that allows the frontend to play Spotify-discovered metadata by finding playable streams on the Audius network.
+## � Table of Contents
+1.  [System Architecture](#-system-architecture)
+2.  [Key Features & Logic](#-key-features--logic)
+3.  [Technology Stack Deep Dive](#-technology-stack-deep-dive)
+4.  [API Reference (Detailed)](#-api-reference-detailed)
+5.  [Database Schema](#-database-schema)
+6.  [Setup & Installation](#-setup--installation)
+7.  [Troubleshooting](#-troubleshooting)
 
 ---
 
-## ✨ Key Features
+## 🏗 System Architecture
 
-*   **Secure Authentication:** User registration and login flows using `bcrypt` for password hashing and `jsonwebtoken` (JWT) for session management.
-*   **Media Management (CRUD):** Admin APIs to Create, Read, Update, and Delete Songs, Albums, and Podcasts.
-*   **Search Aggregation:** A unified search endpoint that queries:
-    1.  Local Database (Admin uploads)
-    2.  Spotify Web API (External discovery)
-*   **Playback Resolution:** Logic to normalize track titles/artists and find matches on third-party streaming networks.
-*   **CORS Enabled:** Configured to allow secure cross-origin requests from Frontend and Admin apps.
+The backend operates on a **Hybrid Resolution Model**. It does not merely host files; it intelligently "resolves" metadata into playable streams.
 
----
+### Architecture Diagram
 
-## 🛠️ Technology Stack
-
-*   **Runtime:** [Node.js](https://nodejs.org/)
-*   **Framework:** [Express.js](https://expressjs.com/) - Minimalist web framework.
-*   **ORM/Database Client:** `supabase-js` - For interacting with PostgreSQL.
-*   **Utilities:**
-    *   `axios`: For making external API requests (to Spotify/Audius).
-    *   `dotenv`: Environment variable management.
-    *   `cors`: Cross-Origin Resource Sharing middleware.
-    *   `multer`: Middleware for handling `multipart/form-data` (file uploads).
-    *   `nodemon`: Development utility for hot-reloading.
-
----
-
-## 🔌 External Integrations
-
-### 1. Spotify Web API
-*   **Purpose:** Used for music discovery, popularity metrics, and rich metadata (Album art, Artist info).
-*   **Library:** `spotify-web-api-node`
-*   **Flow:** Backend authenticates with Client Credentials Flow -> Searches tracks -> Returns metadata to frontend.
-
-### 2. Audius Discovery Network
-*   **Purpose:** Provides the actual audio streams (`mp3`) for playback.
-*   **Flow:** The `/api/resolve` endpoint takes a track title/artist, searches the Audius API network, finds the best match, and returns the stream URL.
-
-### 3. Cloudinary
-*   **Purpose:** Cloud storage for Admin-uploaded assets.
-*   **Assets:** Song files (`.mp3`), Cover Images (`.jpg`, `.png`).
-
----
-
-## 📂 Project Structure
-
-```text
-backend/
-├── controllers/        # Business Logic
-│   ├── adminController.js    # Stats & Management
-│   ├── authController.js     # Login/Signup logic
-│   ├── resolveController.js  # Spotify->Audius bridging logic
-│   ├── songController.js     # Song CRUD
-│   ├── trackController.js    # Public Track retrieval
-│   └── ...
-│
-├── routes/             # API Route Definitions
-│   ├── adminRoutes.js
-│   ├── authRoutes.js
-│   ├── resolveRoutes.js      # The Resolver Endpoint
-│   ├── searchRoutes.js
-│   └── ...
-│
-├── services/           # External Service Wrappers
-│   ├── spotifyService.js     # Spotify API interactions
-│   └── audiusService.js      # (Where applicable)
-│
-├── middleware/         # Request Interceptors
-│   ├── authMiddleware.js     # JWT Verification
-│   └── uploadMiddleware.js   # Multer Config
-│
-├── index.js            # Entry Point & Server Config
-├── package.json        # Dependencies
-└── .env                # Secrets (Not committed)
+```mermaid
+graph TD
+    Client[Frontend / Admin App] -->|HTTP Request| API[Express API Server]
+    
+    subgraph "Internal Services"
+        API -->|Auth/Data| DB[(Supabase <br/> PostgreSQL)]
+        API -->|Asset Storage| Cloud[Cloudinary]
+    end
+    
+    subgraph "Resolution Engine"
+        API -->|Search/Metadata| Spotify[Spotify Web API]
+        API -->|Audio Stream| Audius[Audius Decentralized Network]
+    end
+    
+    Spotify -->|Metadata| API
+    Audius -->|Stream URL| API
+    API -->|JSON Response| Client
 ```
 
 ---
 
-## 📋 Database & Storage
+## 🧠 Key Features & Logic
 
-The project uses **Supabase**, offering a PostgreSQL database.
+### 1. The "Resolution Engine" (`/api/resolve`)
+This is the core innovation of StreamLite.
+*   **Problem:** Spotify provides great metadata but 30s previews. Audius provides full streams but harder discovery.
+*   **Solution:**
+    1.  Frontend sends: `{ title: "Shape of You", artist: "Ed Sheeran" }` (from Spotify).
+    2.  Backend normalizes text (lowercase, remove special chars).
+    3.  Backend queries **Audius API** for tracks matching query.
+    4.  Fuzzy matching logic scores results to find the best candidate.
+    5.  Returns a direct `.mp3` stream URL to the frontend.
 
-**Key Tables (Conceptual):**
-*   `users`: Stores user profile and credentials.
-*   `songs`: Metadata for locally hosted/admin tracks.
-*   `podcasts`: Podcast series metadata.
-*   `episodes`: Individual podcast episodes linked to podcasts.
-*   `playlists`: User-created collections.
-*   `liked_songs`: Many-to-many relationship between users and songs.
+### 2. Dual-Layer Authentication
+*   **User Auth:** Standard JWT flow for public users.
+*   **Admin Auth:** Separate login flow. Admins have elevated privileges (CRUD on global library).
+    *   *Security:* Passwords are hashed using `bcrypt` (Salt rounds: 10).
 
----
-
-## 🔐 API Documentation (Primary Endpoints)
-
-### Public
-*   `POST /api/user/register` - Create new account.
-*   `POST /api/user/login` - Authenticate user.
-*   `POST /api/admin/login` - Authenticate admin.
-*   `GET /api/tracks` - Get all available tracks.
-*   `GET /api/search?q={query}` - Search all sources.
-
-### Protected (User)
-*   `POST /api/user/playlist` - Create playlist.
-*   `POST /api/user/like-song` - Like a track.
-
-### Protected (Admin)
-*   `POST /api/admin/tracks` - Upload new track.
-*   `DELETE /api/admin/songs/:id` - Delete track.
-*   `GET /api/admin/stats` - Network statistics.
-
-### Utility
-*   `POST /api/resolve`
-    *   **Body:** `{ "title": "Song Name", "artist": "Artist Name" }`
-    *   **Response:** `{ "audio_url": "...", "duration": 120 }` or `{ "error": "NOT_FOUND" }`
+### 3. Unified Search Aggregator
+The `/api/search` endpoint executes parallel promises:
+*   `Promise 1`: Search local Supabase database (Admin uploads).
+*   `Promise 2`: Search Spotify API (Network results).
+*   **Result:** Responses are merged, tagged with `source: 'local'` or `source: 'spotify'`, and sorted by relevance.
 
 ---
 
-## ⚙️ Setup & Configuration
+## � Technology Stack Deep Dive
 
-1.  **Install Dependencies:**
+| Component | Technology | Reasoning |
+| :--- | :--- | :--- |
+| **Runtime** | Node.js (v18+) | Non-blocking I/O ideal for API plumbing. |
+| **Framework** | Express.js | Minimalist, unopinionated routing. |
+| **Database** | Supabase (PostgreSQL) | Relational integrity + Real-time capabilities. |
+| **Storage** | Cloudinary | CDN-optimized delivery for user uploads. |
+| **Music API** | Spotify Web API | Industry-standard metadata provider. |
+| **Auth** | JSON Web Tokens (JWT) | Stateless authentication scaling. |
+
+---
+
+## � API Reference (Detailed)
+
+### 🔐 Authentication
+
+#### **Login User**
+*   **Endpoint:** `POST /api/user/login`
+*   **Body:**
+    ```json
+    {
+      "email": "user@example.com",
+      "password": "securePassword123"
+    }
+    ```
+*   **Response (200 OK):**
+    ```json
+    {
+      "message": "Login successful",
+      "token": "ey...[JWT_STRING]...",
+      "user": { "id": 1, "name": "John Doe", "email": "..." }
+    }
+    ```
+
+### 🎵 Tracks & Playback
+
+#### **Resolve Stream**
+*   **Endpoint:** `POST /api/resolve`
+*   **Body:**
+    ```json
+    {
+      "title": "Song Title",
+      "artist": "Artist Name",
+      "duration": 300 (Optional hint)
+    }
+    ```
+*   **Response:**
+    *   Success (200): `{ "audio_url": "https://discoveryprovider.audius.co/..." }`
+    *   Not Found (200 but handled): `{ "error": "Track not found" }`
+
+#### **Search Global**
+*   **Endpoint:** `GET /api/search`
+*   **Query Params:** `?q=imagine+dragons`
+*   **Response:**
+    ```json
+    [
+      { "id": "sp_123", "title": "Believer", "source": "spotify", ... },
+      { "id": 5, "title": "Local Indie Track", "source": "local", ... }
+    ]
+    ```
+
+### 👑 Admin Management
+
+#### **Upload Track**
+*   **Endpoint:** `POST /api/admin/tracks`
+*   **Headers:** `Authorization: Bearer <ADMIN_TOKEN>`
+*   **Content-Type:** `multipart/form-data`
+*   **Fields:** `title`, `artist`, `image` (file), `song` (file).
+
+---
+
+## � Database Schema
+
+The generic schema concept used in Supabase:
+
+*   **`users`**: `id` (UUID), `email` (Unique), `password_hash`, `role` (user/admin).
+*   **`songs`**: `id`, `title`, `artist`, `album`, `image_url` (Cloudinary), `song_url` (Cloudinary), `duration`.
+*   **`podcasts`**: `id`, `title`, `publisher`, `description`, `image_url`.
+*   **`episodes`**: `id`, `podcast_id` (FK), `title`, `audio_url`, `duration`.
+
+---
+
+## � Setup & Installation
+
+1.  **Clone & Install**
     ```bash
+    cd backend
     npm install
     ```
 
-2.  **Run Server:**
+2.  **Environment Configuration**
+    Ensure your `.env` file (not committed to repo) has:
+    *   `SUPABASE_URL` / `SUPABASE_KEY`
+    *   `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`
+    *   `AUDIUS_BASE_URL`
+
+3.  **Start Services**
     ```bash
+    # Development Mode (Nodemon)
     npm run dev
+    
+    # Production Mode
+    npm start
     ```
+
+---
+
+## 🔧 Troubleshooting
+
+*   **Error: `Spotify Authorization Failed`**
+    *   *Cause:* Client ID/Secret incorrect or expired token.
+    *   *Fix:* Check `.env` and restart server.
+*   **Error: `Resolution 404`**
+    *   *Cause:* Audius API could not find the track.
+    *   *Fix:* Frontend will auto-fallback. Check logic in `resolveController.js` fuzzy matching strictness.
+*   **Error: `CORS Policy Blocked`**
+    *   *Cause:* Frontend running on unauthorized port.
+    *   *Fix:* Add origin to `cors()` config in `index.js`.
