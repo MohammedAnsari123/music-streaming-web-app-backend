@@ -144,29 +144,7 @@ The project uses **Supabase**, offering a PostgreSQL database.
     npm install
     ```
 
-2.  **Environment Variables:**
-    Create a `.env` file with the following keys:
-    ```env
-    PORT=3000
-    
-    # Database
-    SUPABASE_URL=<your_supabase_url>
-    SUPABASE_KEY=<your_supabase_anon_key>
-    
-    # Auth
-    JWT_SECRET=<strong_secret_string>
-    
-    # External APIs
-    SPOTIFY_CLIENT_ID=<your_spotify_id>
-    SPOTIFY_CLIENT_SECRET=<your_spotify_secret>
-    
-    # Storage
-    CLOUDINARY_CLOUD_NAME=...
-    CLOUDINARY_API_KEY=...
-    CLOUDINARY_API_SECRET=...
-    ```
-
-3.  **Run Server:**
+2.  **Run Server:**
     ```bash
     npm run dev
     ```
