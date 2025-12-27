@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_KEY;
 
 // Helper to get a user-scoped Supabase client
 const getAuthenticatedClient = (req) => {
@@ -63,8 +63,8 @@ const getPlaylistById = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);
         const { id } = req.params;
-        const userId = req.user.id;
 
+        // 1. Get Playlist Details
         const { data: playlist, error: plError } = await supabase
             .from('playlists')
             .select('*')
@@ -73,18 +73,55 @@ const getPlaylistById = async (req, res) => {
 
         if (plError || !playlist) return res.status(404).json({ error: "Playlist not found" });
 
-        // Fetch Tracks (Join)
+        // 2. Fetch Playlist Items (Raw) - No Join yet
+        // We select all columns to get track_id, source, and external_data
         const { data: tracksData, error: tracksError } = await supabase
             .from('playlist_tracks')
-            .select(`
-                track_id,
-                songs:track_id (*)
-            `)
+            .select('*')
             .eq('playlist_id', id);
 
         if (tracksError) throw tracksError;
 
-        const tracks = tracksData.map(item => item.songs).filter(Boolean);
+        // 3. Separate Local vs External
+        // If source is missing or 'local', we treat it as a local song ID
+        const localTrackIds = tracksData
+            .filter(item => item.source === 'local' || !item.source)
+            .map(item => item.track_id);
+
+        // 4. Fetch Local Song Details (Manual Join)
+        let localSongsMap = {};
+        if (localTrackIds.length > 0) {
+            const { data: localSongs, error: songsError } = await supabase
+                .from('songs')
+                .select('*')
+                .in('id', localTrackIds);
+
+            if (songsError) {
+                console.error("Error fetching local songs:", songsError);
+            } else {
+                // Create lookup map
+                localSongs.forEach(song => {
+                    localSongsMap[song.id] = song;
+                });
+            }
+        }
+
+        // 5. Merge Data
+        const tracks = tracksData.map(item => {
+            if (item.source === 'local' || !item.source) {
+                // Return local song details + source
+                const songDetails = localSongsMap[item.track_id];
+                return songDetails ? { ...songDetails, source: 'local' } : null; // Filter out if deleted/not found
+            } else {
+                // External: Use stored JSON
+                // We return a normalized track object
+                return {
+                    id: item.track_id,
+                    ...item.external_data,
+                    source: item.source
+                };
+            }
+        }).filter(Boolean); // Remove nulls
 
         res.json({ ...playlist, tracks });
     } catch (error) {
@@ -98,11 +135,11 @@ const addTrackToPlaylist = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);
         const { id } = req.params; // playlistId
-        const { trackId } = req.body;
+        const { track } = req.body; // Expect full track object now
 
-        if (!trackId) return res.status(400).json({ error: "Track ID is required" });
+        if (!track || !track.id) return res.status(400).json({ error: "Track data is required" });
 
-        // Verify Ownership (still good to explicitly check, even with RLS, for clearer error messages)
+        // Verify Ownership
         const { data: playlist } = await supabase
             .from('playlists')
             .select('user_id')
@@ -110,23 +147,42 @@ const addTrackToPlaylist = async (req, res) => {
             .single();
 
         if (!playlist) return res.status(404).json({ error: "Playlist not found" });
-        // RLS should prevent access if not owner, but this provides a more specific error
-        if (playlist.user_id !== req.user.id) return res.status(403).json({ error: "Unauthorized to modify this playlist" });
+        if (playlist.user_id !== req.user.id) return res.status(403).json({ error: "Unauthorized" });
 
         // Check Duplicate
+        // Note: track.id might be string (Spotify) or number (Supabase). Database col should be text.
         const { data: existing } = await supabase
             .from('playlist_tracks')
             .select('*')
             .eq('playlist_id', id)
-            .eq('track_id', trackId)
+            .eq('track_id', track.id.toString())
             .single();
 
         if (existing) return res.status(400).json({ error: "Track already in playlist" });
 
-        // Add
+        // Prepare Insert Data
+        const source = track.source || 'local';
+        const insertPayload = {
+            playlist_id: id,
+            track_id: track.id.toString(), // Ensure string
+            source: source
+        };
+
+        // If external, store metadata snapshot
+        if (source !== 'local') {
+            insertPayload.external_data = {
+                title: track.title,
+                artist: track.artist,
+                album: track.album,
+                image_url: track.image_url,
+                audio_url: track.audio_url,
+                duration: track.duration
+            };
+        }
+
         const { data, error } = await supabase
             .from('playlist_tracks')
-            .insert([{ playlist_id: id, track_id: trackId }])
+            .insert([insertPayload])
             .select();
 
         if (error) throw error;
@@ -144,7 +200,6 @@ const removeTrackFromPlaylist = async (req, res) => {
         const supabase = getAuthenticatedClient(req);
         const { id, trackId } = req.params;
 
-        // Verify Ownership (still good to explicitly check, even with RLS, for clearer error messages)
         const { data: playlist } = await supabase
             .from('playlists')
             .select('user_id')
@@ -152,8 +207,7 @@ const removeTrackFromPlaylist = async (req, res) => {
             .single();
 
         if (!playlist) return res.status(404).json({ error: "Playlist not found" });
-        // RLS should prevent access if not owner, but this provides a more specific error
-        if (playlist.user_id !== req.user.id) return res.status(403).json({ error: "Unauthorized to modify this playlist" });
+        if (playlist.user_id !== req.user.id) return res.status(403).json({ error: "Unauthorized" });
 
         const { error } = await supabase
             .from('playlist_tracks')

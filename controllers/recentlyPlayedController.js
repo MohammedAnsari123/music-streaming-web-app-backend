@@ -1,8 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_KEY;
 
-// Helper to get a user-scoped Supabase client
 const getAuthenticatedClient = (req) => {
     const token = req.headers.authorization;
     if (!token) throw new Error("Missing Authorization Header");
@@ -17,25 +16,40 @@ const saveProgress = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);
         const userId = req.user.id;
-        const { id, type, position } = req.body; // id is trackId or episodeId
+        const { id, type, position, track } = req.body;
+        // We now expect 'track' object optionally to get metadata for external items
 
         if (!id || !type) return res.status(400).json({ error: "Missing id or type" });
 
-        const isMusic = type === 'music';
+        const contentId = id.toString();
+        const source = (track && track.source) ? track.source : 'local';
+
         const payload = {
             user_id: userId,
+            content_id: contentId,
             content_type: type,
+            source: source,
             last_position: position || 0,
-            played_at: new Date().toISOString(),
-            track_id: isMusic ? id : null,
-            episode_id: !isMusic ? id : null
+            played_at: new Date().toISOString()
         };
 
-        // Upsert based on unique constraints
+        // If external, save metadata
+        if (source !== 'local' && track) {
+            payload.external_data = {
+                title: track.title,
+                artist: track.artist,
+                album: track.album,
+                image_url: track.image_url,
+                audio_url: track.audio_url,
+                duration: track.duration
+            };
+        }
+
+        // Upsert
         const { data, error } = await supabase
             .from('recently_played')
             .upsert(payload, {
-                onConflict: isMusic ? 'user_id, track_id' : 'user_id, episode_id'
+                onConflict: 'user_id, content_id'
             })
             .select();
 
@@ -53,32 +67,72 @@ const getRecentlyPlayed = async (req, res) => {
         const supabase = getAuthenticatedClient(req);
         const userId = req.user.id;
 
-        const { data, error } = await supabase
+        const { data: history, error } = await supabase
             .from('recently_played')
-            .select(`
-                *,
-                songs:track_id (*),
-                episodes:episode_id (*)
-            `)
+            .select('*')
             .eq('user_id', userId)
             .order('played_at', { ascending: false })
             .limit(20);
 
         if (error) throw error;
 
-        // Normalize response
-        const formatted = data.map(item => {
-            const isMusic = item.content_type === 'music';
-            const details = isMusic ? item.songs : item.episodes;
+        // Fetch Local Details (Manual Join)
+        // We need to fetch details for local songs and local episodes
+        const localSongIds = history
+            .filter(h => h.source === 'local' && h.content_type === 'music')
+            .map(h => h.content_id);
+
+        const localEpisodeIds = history
+            .filter(h => h.source === 'local' && h.content_type === 'podcast')
+            .map(h => h.content_id);
+
+        let songsMap = {};
+        let episodesMap = {};
+
+        if (localSongIds.length > 0) {
+            const { data: songs } = await supabase
+                .from('songs')
+                .select('*')
+                .in('id', localSongIds);
+            songs?.forEach(s => songsMap[s.id] = s);
+        }
+
+        if (localEpisodeIds.length > 0) {
+            const { data: episodes } = await supabase
+                .from('episodes')
+                .select('*')
+                .in('id', localEpisodeIds);
+            episodes?.forEach(e => episodesMap[e.id] = e);
+        }
+
+        // Format Response
+        const formatted = history.map(item => {
+            let details = {};
+
+            if (item.source === 'local') {
+                if (item.content_type === 'music') {
+                    details = songsMap[item.content_id];
+                } else {
+                    details = episodesMap[item.content_id];
+                }
+                if (!details) return null; // Content deleted
+            } else {
+                // External
+                details = {
+                    id: item.content_id,
+                    ...item.external_data
+                };
+            }
+
             return {
+                ...details,
                 history_id: item.id,
                 type: item.content_type,
                 last_position: item.last_position,
                 played_at: item.played_at,
-                // Spread details but keep flat structure for easy frontend consumption
-                ...details
+                source: item.source
             };
-        }).filter(item => item.id); // Filter out if joined content was deleted
+        }).filter(Boolean);
 
         res.json(formatted);
     } catch (error) {

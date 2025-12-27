@@ -18,6 +18,22 @@ const getAdminStats = async (req, res) => {
     }
 };
 
+// GET /api/admin/users
+const getAllUsers = async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        console.error("Get Users Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+}
+
 // POST /api/admin/login
 const adminLogin = async (req, res) => {
     const { email, password } = req.body;
@@ -41,4 +57,4 @@ const adminLogin = async (req, res) => {
     res.json({ token: data.session.access_token, user: data.user });
 }
 
-module.exports = { getAdminStats, adminLogin };
+module.exports = { getAdminStats, adminLogin, getAllUsers };

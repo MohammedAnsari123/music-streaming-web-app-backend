@@ -11,6 +11,7 @@ const tracksRouter = require('./routes/trackRoutes');
 const podcastRouter = require('./routes/podcastRoutes');
 const playlistRouter = require('./routes/playlistRoutes');
 const genreRouter = require('./routes/genreRoutes');
+const favoriteRoutes = require('./routes/favoriteRoutes');
 
 const app = express()
 
@@ -24,9 +25,22 @@ app.use('/api/tracks', tracksRouter);
 app.use('/api/podcasts', podcastRouter);
 app.use('/api/playlists', playlistRouter);
 app.use('/api/genres', genreRouter);
+app.use('/api/favorites', favoriteRoutes);
+
+const searchRouter = require('./routes/searchRoutes');
+app.use('/api/search', searchRouter);
+
 const recentlyPlayedRouter = require('./routes/recentlyPlayedRoutes');
 app.use('/api/recently-played', recentlyPlayedRouter);
 
+const resolveRouter = require('./routes/resolveRoutes');
+app.use('/api/resolve', resolveRouter);
+
+// Global Error Handler
+const errorHandler = require('./middleware/errorHandler');
+app.use(errorHandler);
+
 app.listen(process.env.PORT, () => {
-    console.log(`server Running on port ${process.env.PORT}`)
+    console.log(`server Running on port ${process.env.PORT}`);
+    console.log("Registered Routes: /api/resolve, /api/search, /api/tracks, etc.");
 })

@@ -3,8 +3,8 @@ const router = express.Router();
 const multer = require('multer');
 const { verifyAdmin } = require('../middleware/authMiddleware');
 const { addSong } = require('../controllers/songController');
-const { addPodcast, addEpisode } = require('../controllers/podcastController');
-const { getAdminStats, adminLogin } = require('../controllers/adminController');
+const { addPodcast, addEpisode, deletePodcast, deleteEpisode } = require('../controllers/podcastController');
+const { getAdminStats, adminLogin, getAllUsers } = require('../controllers/adminController');
 
 // Multer Config
 const storage = multer.memoryStorage();
@@ -20,9 +20,13 @@ router.post('/login', adminLogin);
 router.use(verifyAdmin);
 
 router.get('/stats', getAdminStats);
+router.get('/users', getAllUsers);
 
 router.post('/tracks', upload.fields([{ name: 'song', maxCount: 1 }, { name: 'image', maxCount: 1 }]), addSong);
 router.post('/podcasts', upload.fields([{ name: 'image', maxCount: 1 }]), addPodcast);
 router.post('/episodes', upload.fields([{ name: 'audio', maxCount: 1 }]), addEpisode);
+
+router.delete('/podcasts/:id', deletePodcast);
+router.delete('/episodes/:id', deleteEpisode);
 
 module.exports = router;

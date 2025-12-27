@@ -136,4 +136,49 @@ const addEpisode = async (req, res) => {
     }
 }
 
-module.exports = { getAllPodcasts, getPodcastById, getPodcastEpisodes, addPodcast, addEpisode };
+// DELETE /api/admin/podcasts/:id
+const deletePodcast = async (req, res) => {
+    try {
+        const authSupabase = getAuthClient(req);
+        const { id } = req.params;
+
+        // 1. Get Podcast Details (for Image path) - Optional cleanup
+        // We focus on DB deletion first
+
+        // 2. Delete Record (Cascading delete in DB is preferred)
+        const { error: deleteError } = await authSupabase
+            .from('podcasts')
+            .delete()
+            .eq('id', id);
+
+        if (deleteError) throw deleteError;
+
+        res.json({ message: "Podcast deleted successfully" });
+
+    } catch (error) {
+        console.error("Delete Podcast Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+}
+
+// DELETE /api/admin/episodes/:id
+const deleteEpisode = async (req, res) => {
+    try {
+        const authSupabase = getAuthClient(req);
+        const { id } = req.params;
+
+        const { error } = await authSupabase
+            .from('episodes')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+
+        res.json({ message: "Episode deleted successfully" });
+    } catch (error) {
+        console.error("Delete Episode Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+}
+
+module.exports = { getAllPodcasts, getPodcastById, getPodcastEpisodes, addPodcast, addEpisode, deletePodcast, deleteEpisode };

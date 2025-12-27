@@ -12,7 +12,14 @@ const getAllTracks = async (req, res) => {
             throw error;
         }
 
-        res.json(data);
+        // Standardize response
+        const formattedData = data.map(track => ({
+            ...track,
+            audio_url: track.song_url,
+            source: 'local'
+        }));
+
+        res.json(formattedData);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -31,7 +38,13 @@ const getTrackById = async (req, res) => {
             throw error;
         }
 
-        res.json(data);
+        const formattedTrack = {
+            ...data,
+            audio_url: data.song_url,
+            source: 'local'
+        };
+
+        res.json(formattedTrack);
     } catch (error) {
         res.status(404).json({ error: "Track not found" });
     }

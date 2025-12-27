@@ -1,5 +1,7 @@
 const globalSupabase = require('../config/supabaseClient');
 const { createClient } = require("@supabase/supabase-js");
+const { searchSpotify } = require('../services/spotifyService');
+const { searchAudius } = require('../services/audiusService');
 
 // Helper (Reused or Utils - putting inline for now as requested by user's "clean routes" but sloppy controller implies we do logic here)
 const getAuthClient = (req) => {
@@ -65,7 +67,10 @@ const getAllSongs = async (req, res) => {
         console.log("----- Get All Songs Request Received -----");
 
         // Removed order('created_at') temporarily to rule out column missing issues
-        const { data, error } = await globalSupabase.from('songs').select('*');
+        const { data, error } = await globalSupabase
+            .from('songs')
+            .select('*')
+            .order('created_at', { ascending: false });
 
         if (error) {
             console.error("Supabase Select Error:", error);
@@ -73,7 +78,15 @@ const getAllSongs = async (req, res) => {
         }
 
         console.log(`Fetched ${data.length} songs`);
-        res.json(data);
+
+        // Standardize response for frontend player
+        const formattedData = data.map(song => ({
+            ...song,
+            audio_url: song.song_url, // Alias for consistent player usage
+            source: 'local'
+        }));
+
+        res.json(formattedData);
 
     } catch (error) {
         console.error("Global Get All Songs Error:", error);
@@ -100,5 +113,45 @@ const deleteSong = async (req, res) => {
     }
 }
 
+const searchExternalMusic = async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q) return res.status(400).json({ message: "Query parameter 'q' is required" });
 
-module.exports = { addSong, getAllSongs, deleteSong }
+        console.log(`----- Searching Music for: ${q} -----`);
+
+        // Search in parallel
+        const [spotifyResults, audiusResults, localResults] = await Promise.all([
+            searchSpotify(q),
+            searchAudius(q),
+            globalSupabase.from('songs').select('*').ilike('title', `%${q}%`)
+        ]);
+
+        // Format Local Results
+        const formattedLocal = (localResults.data || []).map(song => ({
+            id: song.id,
+            title: song.title,
+            artist: song.artist,
+            album: song.album,
+            image_url: song.image_url,
+            audio_url: song.song_url,
+            source: 'local',
+            duration: null // Supabase doesn't strictly store duration usually
+        }));
+
+        const combinedResults = [
+            ...formattedLocal,
+            ...spotifyResults,
+            ...audiusResults
+        ];
+
+        res.json(combinedResults);
+
+    } catch (error) {
+        console.error("Search Error:", error);
+        res.status(500).json({ message: "Search failed", error: error.message });
+    }
+}
+
+
+module.exports = { addSong, getAllSongs, deleteSong, searchExternalMusic }
