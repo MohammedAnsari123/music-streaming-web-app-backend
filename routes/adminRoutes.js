@@ -4,7 +4,7 @@ const multer = require('multer');
 const { verifyAdmin } = require('../middleware/authMiddleware');
 const { addSong } = require('../controllers/songController');
 const { addPodcast, addEpisode, deletePodcast, deleteEpisode } = require('../controllers/podcastController');
-const { getAdminStats, adminLogin, getAllUsers } = require('../controllers/adminController');
+const { getDashboardStats, loginAdmin, registerAdmin, getAllUsers } = require('../controllers/adminController');
 
 // Multer Config
 const storage = multer.memoryStorage();
@@ -14,12 +14,13 @@ const upload = multer({
 });
 
 // PUBLIC Admin Routes
-router.post('/login', adminLogin);
+router.post('/login', loginAdmin);
+router.post('/register', registerAdmin);
 
 // PROTECTED Admin Routes
 router.use(verifyAdmin);
 
-router.get('/stats', getAdminStats);
+router.get('/stats', getDashboardStats);
 router.get('/users', getAllUsers);
 
 router.post('/tracks', upload.fields([{ name: 'song', maxCount: 1 }, { name: 'image', maxCount: 1 }]), addSong);
