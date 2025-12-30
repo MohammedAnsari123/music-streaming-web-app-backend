@@ -1,6 +1,7 @@
 const globalSupabase = require('../config/supabaseClient');
 const { searchSpotify } = require('../services/spotifyService');
 const { searchAudius } = require('../services/audiusService');
+const { searchInternetArchive } = require('../services/internetArchiveService');
 
 const globalSearch = async (req, res) => {
     try {
@@ -9,10 +10,11 @@ const globalSearch = async (req, res) => {
 
         console.log(`----- Global Search: ${q} -----`);
 
-        // Search in parallel: Local Songs, Local Podcasts, Spotify, Audius
-        const [spotifyResults, audiusResults, localSongs, localPodcasts] = await Promise.all([
+        // Search in parallel: Local Songs, Local Podcasts, Spotify, Audius, Internet Archive
+        const [spotifyResults, audiusResults, internetArchiveResults, localSongs, localPodcasts] = await Promise.all([
             searchSpotify(q),
             searchAudius(q),
+            searchInternetArchive(q),
             globalSupabase.from('songs').select('*').ilike('title', `%${q}%`).limit(10),
             globalSupabase.from('podcasts').select('*').ilike('title', `%${q}%`).limit(10)
         ]);
@@ -44,7 +46,8 @@ const globalSearch = async (req, res) => {
             ...formattedSongs,
             ...formattedPodcasts,
             ...spotifyResults, // Ensure spotify service returns 'type': 'music' or handled
-            ...audiusResults
+            ...audiusResults,
+            ...internetArchiveResults
         ];
 
         res.json(combinedResults);

@@ -1,4 +1,5 @@
 const { searchAudius } = require('../services/audiusService');
+const { resolveInternetArchive } = require('../services/internetArchiveService');
 
 const normalize = (text) => {
     if (!text) return "";
@@ -10,7 +11,13 @@ const normalize = (text) => {
 
 const resolveAudio = async (req, res) => {
     try {
-        const { title, artist } = req.body;
+        const { title, artist, id, source } = req.body;
+
+        if (source === 'internet_archive' && id) {
+            console.log(`Resolving Internet Archive track: ${id}`);
+            const track = await resolveInternetArchive(id);
+            return res.json(track);
+        }
 
         if (!title || !artist) {
             return res.status(400).json({ message: "Title and Artist required" });
