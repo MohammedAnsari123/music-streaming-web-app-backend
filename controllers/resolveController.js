@@ -25,25 +25,17 @@ const resolveAudio = async (req, res) => {
 
         console.log(`Resolving Audio for: ${title} - ${artist}`);
 
-        // 1. Normalize
         const query = `${normalize(title)} ${normalize(artist)}`;
         console.log(`Normalized Query: ${query}`);
 
-        // 2. Search Audius
         const results = await searchAudius(query);
-
-        // 3. Match
-        // Simple fuzzy match: Check if Audius title/artist contains normalized search terms
-        // or just take the first one if strict matching fails? 
-        // User Logic: "Compare normalized titles... Accept partial match"
 
         const bestMatch = results.find(track => {
             const audiusTitle = normalize(track.title);
-            const audiusArtist = normalize(track.artist); // user.name from service
+            const audiusArtist = normalize(track.artist);
             const targetTitle = normalize(title);
             const targetArtist = normalize(artist);
 
-            // Basic inclusion check
             return audiusTitle.includes(targetTitle) || targetTitle.includes(audiusTitle);
         });
 
@@ -56,8 +48,6 @@ const resolveAudio = async (req, res) => {
             });
         }
 
-        // Fallback: If no strict match, maybe return first result if query was specific? 
-        // For now, adhere to "If found -> stream... Else -> Not available"
         if (results.length > 0) {
             console.log("No strict match, returning best guess (First Result)");
             return res.json({

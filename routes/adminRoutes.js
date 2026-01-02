@@ -6,18 +6,15 @@ const { addSong } = require('../controllers/songController');
 const { addPodcast, addEpisode, deletePodcast, deleteEpisode } = require('../controllers/podcastController');
 const { getDashboardStats, loginAdmin, registerAdmin, getAllUsers } = require('../controllers/adminController');
 
-// Multer Config
 const storage = multer.memoryStorage();
 const upload = multer({
     storage: storage,
     limits: { fileSize: 50 * 1024 * 1024 }
 });
 
-// PUBLIC Admin Routes
 router.post('/login', loginAdmin);
 router.post('/register', registerAdmin);
 
-// PROTECTED Admin Routes
 router.use(verifyAdmin);
 
 router.get('/stats', getDashboardStats);

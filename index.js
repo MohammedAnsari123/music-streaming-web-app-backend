@@ -36,7 +36,6 @@ app.use('/api/recently-played', recentlyPlayedRouter);
 const resolveRouter = require('./routes/resolveRoutes');
 app.use('/api/resolve', resolveRouter);
 
-// Global Error Handler
 const errorHandler = require('./middleware/errorHandler');
 app.use(errorHandler);
 

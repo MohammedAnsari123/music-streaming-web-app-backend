@@ -2,7 +2,6 @@ const { createClient } = require('@supabase/supabase-js');
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const supabaseKey = process.env.VITE_SUPABASE_KEY;
 
-// Helper to get a user-scoped Supabase client
 const getAuthenticatedClient = (req) => {
     const token = req.headers.authorization;
     if (!token) throw new Error("Missing Authorization Header");
@@ -12,7 +11,6 @@ const getAuthenticatedClient = (req) => {
     });
 };
 
-// GET /api/playlists (My Playlists)
 const getUserPlaylists = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);
@@ -32,7 +30,6 @@ const getUserPlaylists = async (req, res) => {
     }
 }
 
-// POST /api/playlists (Create)
 const createPlaylist = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);
@@ -58,13 +55,11 @@ const createPlaylist = async (req, res) => {
     }
 }
 
-// GET /api/playlists/:id (Details + Tracks)
 const getPlaylistById = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);
         const { id } = req.params;
 
-        // 1. Get Playlist Details
         const { data: playlist, error: plError } = await supabase
             .from('playlists')
             .select('*')
@@ -73,8 +68,6 @@ const getPlaylistById = async (req, res) => {
 
         if (plError || !playlist) return res.status(404).json({ error: "Playlist not found" });
 
-        // 2. Fetch Playlist Items (Raw) - No Join yet
-        // We select all columns to get track_id, source, and external_data
         const { data: tracksData, error: tracksError } = await supabase
             .from('playlist_tracks')
             .select('*')
@@ -82,13 +75,10 @@ const getPlaylistById = async (req, res) => {
 
         if (tracksError) throw tracksError;
 
-        // 3. Separate Local vs External
-        // If source is missing or 'local', we treat it as a local song ID
         const localTrackIds = tracksData
             .filter(item => item.source === 'local' || !item.source)
             .map(item => item.track_id);
 
-        // 4. Fetch Local Song Details (Manual Join)
         let localSongsMap = {};
         if (localTrackIds.length > 0) {
             const { data: localSongs, error: songsError } = await supabase
@@ -99,29 +89,24 @@ const getPlaylistById = async (req, res) => {
             if (songsError) {
                 console.error("Error fetching local songs:", songsError);
             } else {
-                // Create lookup map
                 localSongs.forEach(song => {
                     localSongsMap[song.id] = song;
                 });
             }
         }
 
-        // 5. Merge Data
         const tracks = tracksData.map(item => {
             if (item.source === 'local' || !item.source) {
-                // Return local song details + source
                 const songDetails = localSongsMap[item.track_id];
-                return songDetails ? { ...songDetails, source: 'local' } : null; // Filter out if deleted/not found
+                return songDetails ? { ...songDetails, source: 'local' } : null;
             } else {
-                // External: Use stored JSON
-                // We return a normalized track object
                 return {
                     id: item.track_id,
                     ...item.external_data,
                     source: item.source
                 };
             }
-        }).filter(Boolean); // Remove nulls
+        }).filter(Boolean);
 
         res.json({ ...playlist, tracks });
     } catch (error) {
@@ -130,16 +115,14 @@ const getPlaylistById = async (req, res) => {
     }
 }
 
-// POST /api/playlists/:id/tracks (Add Track)
 const addTrackToPlaylist = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);
-        const { id } = req.params; // playlistId
-        const { track } = req.body; // Expect full track object now
+        const { id } = req.params;
+        const { track } = req.body;
 
         if (!track || !track.id) return res.status(400).json({ error: "Track data is required" });
 
-        // Verify Ownership
         const { data: playlist } = await supabase
             .from('playlists')
             .select('user_id')
@@ -149,8 +132,6 @@ const addTrackToPlaylist = async (req, res) => {
         if (!playlist) return res.status(404).json({ error: "Playlist not found" });
         if (playlist.user_id !== req.user.id) return res.status(403).json({ error: "Unauthorized" });
 
-        // Check Duplicate
-        // Note: track.id might be string (Spotify) or number (Supabase). Database col should be text.
         const { data: existing } = await supabase
             .from('playlist_tracks')
             .select('*')
@@ -160,15 +141,13 @@ const addTrackToPlaylist = async (req, res) => {
 
         if (existing) return res.status(400).json({ error: "Track already in playlist" });
 
-        // Prepare Insert Data
         const source = track.source || 'local';
         const insertPayload = {
             playlist_id: id,
-            track_id: track.id.toString(), // Ensure string
+            track_id: track.id.toString(),
             source: source
         };
 
-        // If external, store metadata snapshot
         if (source !== 'local') {
             insertPayload.external_data = {
                 title: track.title,
@@ -194,7 +173,6 @@ const addTrackToPlaylist = async (req, res) => {
     }
 }
 
-// DELETE /api/playlists/:id/tracks/:trackId (Remove Track)
 const removeTrackFromPlaylist = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);

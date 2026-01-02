@@ -11,7 +11,6 @@ const getAuthenticatedClient = (req) => {
     });
 };
 
-// GET /api/favorites (Get All)
 const getFavorites = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);
@@ -25,11 +24,9 @@ const getFavorites = async (req, res) => {
 
         if (error) throw error;
 
-        // Fetch Local song details for local tracks
-        // (Similar logic to Playlist: merge local data, keep external data as is)
         const localTrackIds = favorites
             .filter(f => !f.source || f.source === 'local')
-            .map(f => f.song_id); // Assuming 'song_id' holds the ID for local songs
+            .map(f => f.song_id);
 
         let localSongsMap = {};
         if (localTrackIds.length > 0) {
@@ -48,9 +45,8 @@ const getFavorites = async (req, res) => {
                 const song = localSongsMap[f.song_id];
                 return song ? { ...song, source: 'local', liked_at: f.created_at } : null;
             } else {
-                // External
                 return {
-                    id: f.song_id, // This might be external ID string
+                    id: f.song_id,
                     ...f.external_data,
                     source: f.source,
                     liked_at: f.created_at
@@ -66,7 +62,6 @@ const getFavorites = async (req, res) => {
     }
 }
 
-// POST /api/favorites/toggle (Toggle Like)
 const toggleFavorite = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);
@@ -78,7 +73,6 @@ const toggleFavorite = async (req, res) => {
         const songId = track.id.toString();
         const source = track.source || 'local';
 
-        // Check if exists
         const { data: existing } = await supabase
             .from('favorites')
             .select('id')
@@ -87,7 +81,6 @@ const toggleFavorite = async (req, res) => {
             .single();
 
         if (existing) {
-            // Unlike (Delete)
             await supabase
                 .from('favorites')
                 .delete()
@@ -95,7 +88,6 @@ const toggleFavorite = async (req, res) => {
 
             return res.json({ liked: false, message: "Removed from favorites" });
         } else {
-            // Like (Insert)
             const payload = {
                 user_id: userId,
                 song_id: songId,
@@ -128,7 +120,6 @@ const toggleFavorite = async (req, res) => {
     }
 }
 
-// GET /api/favorites/check/:id (Check Status)
 const checkFavorite = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);
@@ -145,7 +136,6 @@ const checkFavorite = async (req, res) => {
         res.json({ liked: !!data });
 
     } catch (error) {
-        // Silent fail for check
         res.json({ liked: false });
     }
 }

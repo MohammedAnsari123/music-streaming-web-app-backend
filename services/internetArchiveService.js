@@ -5,14 +5,11 @@ const IA_METADATA_URL = "https://archive.org/metadata";
 
 const searchInternetArchive = async (query) => {
     try {
-        // Query for audio, title/creator matches
-        // output=json, fl[]=identifier,title,creator,mediatype
-        // We use 'mediatype:audio' to filter for audio content
         const q = `mediatype:audio AND (title:(${query}) OR creator:(${query}))`;
         
         const params = {
             q: q,
-            fl: ['identifier', 'title', 'creator', 'mediatype'], // Fields to return
+            fl: ['identifier', 'title', 'creator', 'mediatype'],
             output: 'json',
             rows: 10,
             page: 1
@@ -29,11 +26,10 @@ const searchInternetArchive = async (query) => {
         return docs.map(doc => ({
             id: doc.identifier,
             title: doc.title,
-            artist: doc.creator || "Unknown Artist", // Standardize 'creator' to 'artist'
+            artist: doc.creator || "Unknown Artist",
             source: "internet_archive",
-            // IA automatically generates thumbnails at this URL pattern
             image_url: "https://archive.org/services/img/" + doc.identifier, 
-            type: "music" // Treat as music generally
+            type: "music"
         }));
     } catch (error) {
         console.error("IA Search Error:", error.message);
@@ -54,25 +50,21 @@ const resolveInternetArchive = async (id) => {
         const dir = data.dir;
         const files = data.files;
 
-        // Priority for standard MP3 formats
         let audioFile = files.find(f => f.format === 'VBR MP3');
         if (!audioFile) audioFile = files.find(f => f.format === 'MP3');
         if (!audioFile) audioFile = files.find(f => f.format === '128Kbps MP3');
         
-        // Fallback to any MP3 file if specific formats not found
         if (!audioFile) audioFile = files.find(f => f.name.toLowerCase().endsWith('.mp3'));
 
         if (!audioFile) {
              throw new Error("No suitable MP3 audio file found for this item");
         }
 
-        // Construct Direct Streaming URL
-        // Pattern: https://{server}{dir}/{filename}
         const audioUrl = `https://${server}${dir}/${audioFile.name}`;
         
         return {
             audio_url: audioUrl,
-            duration: parseFloat(audioFile.length) || 0, // Duration in seconds
+            duration: parseFloat(audioFile.length) || 0,
             source: "internet_archive",
             id: id
         };

@@ -1,10 +1,9 @@
 const globalSupabase = require('../config/supabaseClient');
 const { createClient } = require("@supabase/supabase-js");
 
-// Helper to get Auth Client
 const getAuthClient = (req) => {
     const token = req.headers.authorization;
-    if (!token) return globalSupabase; // Fallback to anonymous if no token (will fail RLS)
+    if (!token) return globalSupabase;
 
     return createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_KEY, {
         global: { headers: { Authorization: token } }
@@ -62,7 +61,6 @@ const getPodcastEpisodes = async (req, res) => {
     }
 }
 
-// POST /api/admin/podcasts
 const addPodcast = async (req, res) => {
     try {
         const authSupabase = getAuthClient(req);
@@ -74,7 +72,6 @@ const addPodcast = async (req, res) => {
             return res.status(400).json({ error: "Missing required fields (title, desc, image)" });
         }
 
-        // Upload Image
         const imagePath = `podcasts/${Date.now()}_${imageFile.originalname}`;
         const { error: uploadError } = await authSupabase.storage.from('images').upload(imagePath, imageFile.buffer, {
             contentType: imageFile.mimetype
@@ -83,7 +80,6 @@ const addPodcast = async (req, res) => {
 
         const imageUrl = authSupabase.storage.from('images').getPublicUrl(imagePath).data.publicUrl;
 
-        // Insert Record
         const { data, error } = await authSupabase.from('podcasts').insert([{
             title, publisher, description, image_url: imageUrl
         }]).select();
@@ -96,7 +92,6 @@ const addPodcast = async (req, res) => {
     }
 }
 
-// POST /api/admin/episodes
 const addEpisode = async (req, res) => {
     try {
         const authSupabase = getAuthClient(req);
@@ -113,7 +108,6 @@ const addEpisode = async (req, res) => {
             return res.status(400).json({ error: "Invalid audio format" });
         }
 
-        // Upload Audio
         const audioPath = `episodes/${Date.now()}_${audioFile.originalname}`;
         const { error: uploadError } = await authSupabase.storage.from('songs').upload(audioPath, audioFile.buffer, {
             contentType: audioFile.mimetype
@@ -122,7 +116,6 @@ const addEpisode = async (req, res) => {
         if (uploadError) throw uploadError;
         const audioUrl = authSupabase.storage.from('songs').getPublicUrl(audioPath).data.publicUrl;
 
-        // Insert Record
         const { data, error } = await authSupabase.from('episodes').insert([{
             podcast_id, title, description, duration, audio_url: audioUrl
         }]).select();
@@ -136,16 +129,11 @@ const addEpisode = async (req, res) => {
     }
 }
 
-// DELETE /api/admin/podcasts/:id
 const deletePodcast = async (req, res) => {
     try {
         const authSupabase = getAuthClient(req);
         const { id } = req.params;
 
-        // 1. Get Podcast Details (for Image path) - Optional cleanup
-        // We focus on DB deletion first
-
-        // 2. Delete Record (Cascading delete in DB is preferred)
         const { error: deleteError } = await authSupabase
             .from('podcasts')
             .delete()
@@ -161,7 +149,6 @@ const deletePodcast = async (req, res) => {
     }
 }
 
-// DELETE /api/admin/episodes/:id
 const deleteEpisode = async (req, res) => {
     try {
         const authSupabase = getAuthClient(req);

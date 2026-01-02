@@ -3,7 +3,7 @@ const supabase = require('../config/supabaseClient');
 const getAllTracks = async (req, res) => {
     try {
         const { data, error } = await supabase
-            .from('songs') // Corrected table name
+            .from('songs')
             .select('*')
             .order('created_at', { ascending: false });
 
@@ -12,7 +12,6 @@ const getAllTracks = async (req, res) => {
             throw error;
         }
 
-        // Standardize response
         const formattedData = data.map(track => ({
             ...track,
             audio_url: track.song_url,
@@ -29,7 +28,7 @@ const getTrackById = async (req, res) => {
     try {
         const { id } = req.params;
         const { data, error } = await supabase
-            .from('songs') // Corrected table name
+            .from('songs')
             .select('*')
             .eq('id', id)
             .single();
@@ -52,14 +51,12 @@ const getTrackById = async (req, res) => {
 
 const getGenres = async (req, res) => {
     try {
-        // Fetch unique categories/genres from tracks (songs)
         const { data, error } = await supabase
-            .from('songs') // Corrected table name
+            .from('songs')
             .select('category');
 
         if (error) throw error;
 
-        // Extract unique values
         const genres = [...new Set(data.map(track => track.category))];
         res.json(genres);
     } catch (error) {

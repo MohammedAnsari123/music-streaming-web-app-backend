@@ -48,7 +48,7 @@ const searchSpotify = async (query) => {
             artist: track.artists.map(a => a.name).join(', '),
             album: track.album.name,
             image_url: track.album.images[0]?.url,
-            audio_url: track.preview_url, // Note: Often null, but best we can get for free
+            audio_url: track.preview_url,
             source: 'spotify',
             duration: track.duration_ms / 1000
         }));

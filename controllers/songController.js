@@ -3,7 +3,6 @@ const { createClient } = require("@supabase/supabase-js");
 const { searchSpotify } = require('../services/spotifyService');
 const { searchAudius } = require('../services/audiusService');
 
-// Helper (Reused or Utils - putting inline for now as requested by user's "clean routes" but sloppy controller implies we do logic here)
 const getAuthClient = (req) => {
     const token = req.headers.authorization;
     if (!token) return globalSupabase;
@@ -17,7 +16,6 @@ const addSong = async (req, res) => {
         const authSupabase = getAuthClient(req);
 
         console.log("----- Add Song Request Received -----");
-        // ... (rest is same logic but using authSupabase)
 
         if (!req.files || !req.files['song'] || !req.files['image']) {
             return res.status(400).json({ message: "Missing files" });
@@ -27,7 +25,6 @@ const addSong = async (req, res) => {
         const songFile = req.files['song'][0];
         const imageFile = req.files['image'][0];
 
-        // VALIDATION
         const allowedAudioTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a'];
         const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -66,7 +63,6 @@ const getAllSongs = async (req, res) => {
     try {
         console.log("----- Get All Songs Request Received -----");
 
-        // Removed order('created_at') temporarily to rule out column missing issues
         const { data, error } = await globalSupabase
             .from('songs')
             .select('*')
@@ -79,10 +75,9 @@ const getAllSongs = async (req, res) => {
 
         console.log(`Fetched ${data.length} songs`);
 
-        // Standardize response for frontend player
         const formattedData = data.map(song => ({
             ...song,
-            audio_url: song.song_url, // Alias for consistent player usage
+            audio_url: song.song_url,
             source: 'local'
         }));
 
@@ -120,14 +115,12 @@ const searchExternalMusic = async (req, res) => {
 
         console.log(`----- Searching Music for: ${q} -----`);
 
-        // Search in parallel
         const [spotifyResults, audiusResults, localResults] = await Promise.all([
             searchSpotify(q),
             searchAudius(q),
             globalSupabase.from('songs').select('*').ilike('title', `%${q}%`)
         ]);
 
-        // Format Local Results
         const formattedLocal = (localResults.data || []).map(song => ({
             id: song.id,
             title: song.title,
@@ -136,7 +129,7 @@ const searchExternalMusic = async (req, res) => {
             image_url: song.image_url,
             audio_url: song.song_url,
             source: 'local',
-            duration: null // Supabase doesn't strictly store duration usually
+            duration: null
         }));
 
         const combinedResults = [

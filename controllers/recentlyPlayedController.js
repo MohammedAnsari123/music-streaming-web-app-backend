@@ -11,13 +11,11 @@ const getAuthenticatedClient = (req) => {
     });
 };
 
-// POST /api/recently-played (Upsert)
 const saveProgress = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);
         const userId = req.user.id;
         const { id, type, position, track } = req.body;
-        // We now expect 'track' object optionally to get metadata for external items
 
         if (!id || !type) return res.status(400).json({ error: "Missing id or type" });
 
@@ -33,7 +31,6 @@ const saveProgress = async (req, res) => {
             played_at: new Date().toISOString()
         };
 
-        // If external, save metadata
         if (source !== 'local' && track) {
             payload.external_data = {
                 title: track.title,
@@ -45,7 +42,6 @@ const saveProgress = async (req, res) => {
             };
         }
 
-        // Upsert
         const { data, error } = await supabase
             .from('recently_played')
             .upsert(payload, {
@@ -61,7 +57,6 @@ const saveProgress = async (req, res) => {
     }
 };
 
-// GET /api/recently-played (Fetch History)
 const getRecentlyPlayed = async (req, res) => {
     try {
         const supabase = getAuthenticatedClient(req);
@@ -76,8 +71,6 @@ const getRecentlyPlayed = async (req, res) => {
 
         if (error) throw error;
 
-        // Fetch Local Details (Manual Join)
-        // We need to fetch details for local songs and local episodes
         const localSongIds = history
             .filter(h => h.source === 'local' && h.content_type === 'music')
             .map(h => h.content_id);
@@ -105,7 +98,6 @@ const getRecentlyPlayed = async (req, res) => {
             episodes?.forEach(e => episodesMap[e.id] = e);
         }
 
-        // Format Response
         const formatted = history.map(item => {
             let details = {};
 
@@ -115,9 +107,8 @@ const getRecentlyPlayed = async (req, res) => {
                 } else {
                     details = episodesMap[item.content_id];
                 }
-                if (!details) return null; // Content deleted
+                if (!details) return null;
             } else {
-                // External
                 details = {
                     id: item.content_id,
                     ...item.external_data

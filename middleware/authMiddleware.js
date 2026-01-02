@@ -1,7 +1,5 @@
 const supabase = require('../config/supabaseClient');
 
-// 1. Verify Token (Authentication)
-// Checks if the user is logged in (Identity)
 const verifyToken = async (req, res, next) => {
     try {
         const token = req.headers.authorization?.split(' ')[1];
@@ -16,7 +14,7 @@ const verifyToken = async (req, res, next) => {
             return res.status(401).json({ error: "Invalid or Expired Token" });
         }
 
-        req.user = user; // Attach raw auth user
+        req.user = user;
         next();
 
     } catch (error) {
@@ -25,18 +23,14 @@ const verifyToken = async (req, res, next) => {
     }
 }
 
-// 2. Verify Admin (Authorization)
-// Checks if the authenticated user has the 'admin' role in the PROFILES table
 const verifyAdmin = async (req, res, next) => {
     try {
         const token = req.headers.authorization?.split(' ')[1];
         if (!token) return res.status(401).json({ error: "Access Denied" });
 
-        // A. Validate Identity
         const { data: { user }, error } = await supabase.auth.getUser(token);
         if (error || !user) return res.status(401).json({ error: "Invalid Token" });
 
-        // B. Validate Role (Database Lookup)
         const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('role')
@@ -52,7 +46,7 @@ const verifyAdmin = async (req, res, next) => {
         }
 
         req.user = user;
-        req.userRole = 'admin'; // Convenience flag
+        req.userRole = 'admin';
         next();
 
     } catch (error) {
